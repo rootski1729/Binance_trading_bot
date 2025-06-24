@@ -154,6 +154,29 @@ class BasicBot:
             self.logger.log_error(e, f"Failed to format quantity for {symbol}")
             return str(quantity)
         
+    def format_price(self, symbol: str, price: float) -> str:
+        try:
+            symbol_info = self.get_symbol_info(symbol)
+            
+            price_filter = None
+            for f in symbol_info['filters']:
+                if f['filterType'] == 'PRICE_FILTER':
+                    price_filter = f
+                    break
+
+            if price_filter:
+                tick_size = Decimal(price_filter['tickSize'])
+                price_decimal = Decimal(str(price))
+                
+                formatted_price = price_decimal.quantize(tick_size, rounding=ROUND_DOWN)
+                return str(formatted_price)
+            
+            return f"{price:.2f}"  
+        except Exception as e:
+            self.logger.log_error(e, f"Failed to format price for {symbol}")
+            return f"{price:.2f}"
+        
+        
     def place_market_order(self, symbol: str, side: str, quantity: float) -> Dict:
         try:
             symbol = self.validator.validate_symbol(symbol)
@@ -184,7 +207,9 @@ class BasicBot:
         except Exception as e:
             self.logger.log_error(e, "unexpected error in market order")
             raise
-        
+    
+    
+    # Place a limit order    
     def place_limit_order(self, symbol: str, side: str, quantity: float, price: float) -> Dict:
         try:
             symbol=self.validator.validate_symbol(symbol)
@@ -193,6 +218,7 @@ class BasicBot:
             price=self.validator.validate_price(price)
 
             formatted_quantity = self.format_quantity(symbol, quantity)
+            formatted_price = self.format_price(symbol, price)
 
             order_params = {
                 'symbol':symbol,
@@ -200,7 +226,7 @@ class BasicBot:
                 'type': 'LIMIT',
                 'timeInForce':'GTC',
                 'quantity': formatted_quantity,
-                'price':str(price),
+                'price':formatted_price,
             }
             
             self.logger.log_api_request("place_limit_order", order_params)
@@ -219,6 +245,7 @@ class BasicBot:
             self.logger.log_error(e, "unexpected error in limit order")
             raise
     
+    # Place a stop-limit order
     def place_stop_limit_order(self, symbol: str, side: str, quantity: float, stop_price: float, limit_price: float) -> Dict:
         try:
             symbol = self.validator.validate_symbol(symbol)
@@ -228,6 +255,8 @@ class BasicBot:
             limit_price = self.validator.validate_price(limit_price)
 
             formatted_quantity = self.format_quantity(symbol, quantity)
+            formatted_stop_price = self.format_price(symbol, stop_price)
+            formatted_limit_price = self.format_price(symbol, limit_price)
 
             order_params = {
                 'symbol':symbol,
@@ -235,8 +264,8 @@ class BasicBot:
                 'type':'STOP',
                 'timeInForce': 'GTC',
                 'quantity':formatted_quantity,
-                'stopPrice': str(stop_price),
-                'price': str(limit_price),
+                'stopPrice':formatted_stop_price,
+                'price':formatted_limit_price
             }
 
             self.logger.log_api_request("place_stop_limit_order", order_params)
@@ -289,17 +318,27 @@ class BasicBot:
     def get_account_balance(self) -> Dict:
         try:
             account = self.client.futures_account()
-            balance_info = {
-                'totalWalletBalance':account['totalWalletBalance'],
-                'totalUnrealizedPnl':account['totalUnrealizedPnl'],
-                'totalMarginBalance':account['totalMarginBalance'],
-                'availableBalance':account['availableBalance']
-            }
+            
 
+            print(f"DEBUG - Account keys: {list(account.keys())}")
+            
+            balance_info = {
+                'totalWalletBalance': account.get('totalWalletBalance', 
+                                                account.get('balance', '0')),
+                'totalUnrealizedPnl': account.get('totalUnrealizedPnl', '0'),
+                'totalMarginBalance': account.get('totalMarginBalance', 
+                                                account.get('totalWalletBalance', 
+                                                        account.get('balance', '0'))),
+                'availableBalance': account.get('availableBalance', 
+                                            account.get('totalWalletBalance',
+                                                        account.get('balance', '0')))
+                                            }
+            
             self.logger.log_api_response("get_account_balance", balance_info)
             return balance_info
+        
         except Exception as e:
-            self.logger.log_error(e, "failed to get account balance")
+            self.logger.log_error(e, "Failed to get account balance")
             raise
     
     
@@ -307,9 +346,26 @@ class BasicBot:
         try:
             symbol = self.validator.validate_symbol(symbol)
             ticker = self.client.futures_ticker(symbol=symbol)
-            return float(ticker['price'])  
+            
+            if isinstance(ticker, dict):
+                for price_field in ['lastPrice', 'price', 'close']:
+                    if price_field in ticker:
+                        return float(ticker[price_field])
+            
+            elif isinstance(ticker, list) and len(ticker) > 0:
+                ticker_item = ticker[0]
+                for price_field in ['lastPrice', 'price', 'close']:
+                    if price_field in ticker_item:
+                        return float(ticker_item[price_field])
+        
+            mark_price = self.client.futures_mark_price(symbol=symbol)
+            if 'markPrice' in mark_price:
+                return float(mark_price['markPrice'])
+            
+            raise Exception(f"Could not get price for {symbol}")
+            
         except Exception as e:
-            self.logger.log_error(e, f"failed To get current price for {symbol}")
+            self.logger.log_error(e, f"Failed to get current price for {symbol}")
             raise
         
 #command line interface for the bot
