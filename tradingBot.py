@@ -134,7 +134,6 @@ class BasicBot:
     def format_quantity(self, symbol: str, quantity: float) -> str:
         try:
             symbol_info = self.get_symbol_info(symbol)
-            
             lot_size_filter = None
             for f in symbol_info['filters']:
                 if f['filterType'] == 'LOT_SIZE':
@@ -163,10 +162,10 @@ class BasicBot:
             formatted_quantity = self.format_quantity(symbol, quantity)
 
             order_params = {
-                'symbol': symbol,
-                'side': side,
-                'type': 'MARKET',
-                'quantity': formatted_quantity,
+                'symbol':symbol,
+                'side':side,
+                'type':'MARKET',
+                'quantity':formatted_quantity,
             }
             
             self.logger.log_api_request("place_market_order", order_params)
@@ -179,33 +178,33 @@ class BasicBot:
             return order
         
         except BinanceAPIException as e:
-            self.logger.log_error(e, "Binance API error in market order")
+            self.logger.log_error(e, "binance API error in market order")
             raise
         except Exception as e:
-            self.logger.log_error(e, "Unexpected error in market order")
+            self.logger.log_error(e, "unexpected error in market order")
             raise
         
     def place_limit_order(self, symbol: str, side: str, quantity: float, price: float) -> Dict:
         try:
-            symbol = self.validator.validate_symbol(symbol)
-            side = self.validator.validate_side(side)
-            quantity = self.validator.validate_quantity(quantity)
-            price = self.validator.validate_price(price)
+            symbol=self.validator.validate_symbol(symbol)
+            side=self.validator.validate_side(side)
+            quantity= self.validator.validate_quantity(quantity)
+            price=self.validator.validate_price(price)
 
             formatted_quantity = self.format_quantity(symbol, quantity)
 
             order_params = {
-                'symbol': symbol,
-                'side': side,
+                'symbol':symbol,
+                'side':side,
                 'type': 'LIMIT',
-                'timeInForce': 'GTC',
+                'timeInForce':'GTC',
                 'quantity': formatted_quantity,
-                'price': str(price),
+                'price':str(price),
             }
             
             self.logger.log_api_request("place_limit_order", order_params)
             
-            order = self.client.futures_create_order(**order_params)
+            order= self.client.futures_create_order(**order_params)
             
             self.logger.log_api_response("place_limit_order", order)
             self.logger.log_order_placement(order)
@@ -213,8 +212,103 @@ class BasicBot:
             return order
             
         except BinanceAPIException as e:
-            self.logger.log_error(e, "Binance API error in limit order")
+            self.logger.log_error(e, "binance API error in limit order")
             raise
         except Exception as e:
-            self.logger.log_error(e, "Unexpected error in limit order")
+            self.logger.log_error(e, "unexpected error in limit order")
             raise
+    
+    def place_stop_limit_order(self, symbol: str, side: str, quantity: float, stop_price: float, limit_price: float) -> Dict:
+        try:
+            symbol = self.validator.validate_symbol(symbol)
+            side= self.validator.validate_side(side)
+            quantity= self.validator.validate_quantity(quantity)
+            stop_price= self.validator.validate_price(stop_price)
+            limit_price = self.validator.validate_price(limit_price)
+
+            formatted_quantity = self.format_quantity(symbol, quantity)
+
+            order_params = {
+                'symbol':symbol,
+                'side': side,
+                'type':'STOP',
+                'timeInForce': 'GTC',
+                'quantity':formatted_quantity,
+                'stopPrice': str(stop_price),
+                'price': str(limit_price),
+            }
+
+            self.logger.log_api_request("place_stop_limit_order", order_params)
+
+            order = self.client.futures_create_order(**order_params)
+
+            self.logger.log_api_response("place_stop_limit_order", order)
+            self.logger.log_order_placement(order)
+
+            return order
+
+        except BinanceAPIException as e:
+            self.logger.log_error(e, "Binance API error in stop limit order")
+            raise
+        except Exception as e:
+            self.logger.log_error(e, "Unexpected error in stop limit order")
+            raise
+        
+        
+    def cancel_order(self, symbol: str, order_id: int) -> Dict:
+        try:
+            symbol =self.validator.validate_symbol(symbol)
+
+            result = self.client.futures_cancel_order(
+                symbol=symbol,
+                orderId=order_id
+            )
+            
+            self.logger.logger.info(f"Order {order_id} cancelled for {symbol}: {result}")
+            return result
+        except Exception as e:
+            self.logger.log_error(e, f"Failed to cancel order {order_id} for {symbol}")
+            raise
+        
+    def get_order_status(self, symbol: str, order_id: int) -> Dict:
+        try:
+            symbol= self.validator.validate_symbol(symbol)
+            order =self.client.futures_get_order(
+                symbol=symbol,
+                orderId=order_id
+            )
+            self.logger.log_api_response("get_order_status", order)
+            return order
+            
+        except Exception as e:
+            self.logger.log_error(e, f"Failed to get order status for {order_id}")
+            raise
+        
+    
+    def get_account_balance(self) -> Dict:
+        try:
+            account = self.client.futures_account()
+            balance_info = {
+                'totalWalletBalance':account['totalWalletBalance'],
+                'totalUnrealizedPnl':account['totalUnrealizedPnl'],
+                'totalMarginBalance':account['totalMarginBalance'],
+                'availableBalance':account['availableBalance']
+            }
+
+            self.logger.log_api_response("get_account_balance", balance_info)
+            return balance_info
+        except Exception as e:
+            self.logger.log_error(e, "failed to get account balance")
+            raise
+    
+    
+    def get_current_price(self, symbol: str) -> float:
+        try:
+            symbol = self.validator.validate_symbol(symbol)
+            ticker = self.client.futures_ticker(symbol=symbol)
+            return float(ticker['price'])  
+        except Exception as e:
+            self.logger.log_error(e, f"failed To get current price for {symbol}")
+            raise
+        
+#command line interface for the bot
