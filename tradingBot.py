@@ -3,8 +3,9 @@ import sys
 import logging
 import json
 from datetime import datetime
-from typing import Dict, optional
+from typing import Dict, Optional
 from decimal import Decimal, ROUND_DOWN
+import argparse
 
 try:
     from binance.client import Client
@@ -312,3 +313,233 @@ class BasicBot:
             raise
         
 #command line interface for the bot
+
+class TradingBotCLI:
+
+    def __init__(self,bot : BasicBot):
+        self.bot = bot
+        
+    def display_menu(slef):
+        
+        print("\n"+"*"*50)
+        print("Welcome to the Binance Trading Bot CLI")
+        print("*"*50+"\n")
+        print("1. Place Market Order")
+        print("2. Place Limit Order")
+        print("3. Place Stop Limit Order")
+        print("4. check order status")
+        print("5. cancel order")
+        print("6. get account balance")
+        print("7. get current price")
+        print("8. Exit")
+        print("\n"+"*"*50)
+        
+    
+    def get_user_input(self, prompt: str,input_type: str,validator=None):
+        while True:
+            try:
+                value = input(prompt)
+                if input_type != str:
+                    value = input_type(value)
+                
+                if validator:
+                    value = validator(value)
+                
+                return value
+                
+            except (ValueError, TypeError) as e:
+                print(f"Invalid input: {e}. Please try again.")
+            except Exception as e:
+                print(f"Error: {e}. Please try again.")
+    
+    def handle_market_order(self):
+        try:
+            symbol = self.get_user_input("Enter symbol (e.g., BTCUSDT): ")
+            side = self.get_user_input("Enter side (BUY/SELL): ").strip().upper()
+            quantity = self.get_user_input("Enter quantity: ", float)
+            
+            current_price= self.bot.get_current_price(symbol)
+            print(f"Current price for {symbol} : ${current_price:.2f}")
+            
+            confirm = input(f"Confirm {side} {quantity} {symbol} at market price? (y/N): ")
+            if confirm.lower() == 'y':
+                order = self.bot.place_market_order(symbol, side, quantity)
+                print(f"\n✅ Market order placed successfully!")
+                print(f"Order ID: {order['orderId']}")
+                print(f"Status: {order['status']}")
+            else:
+                print("Order cancelled.")
+                
+        except Exception as e:
+            print(f"Error placing market order: {e}")
+    
+    
+    def handle_limit_order(self):
+        try:
+            symbol=self.get_user_input("Enter symbol (e.g., BTC): ")
+            side=self.get_user_input("Enter side (BUY/SELL): ").upper()
+            quantity=self.get_user_input("enter quantity: ", float)
+            price=self.get_user_input("enter limit price: ", float)
+            
+            current_price = self.bot.get_current_price(symbol)
+            print(f"current price for {symbol}: ${current_price:.2f}")
+            print(f"Your limit price: ${price:.2f}")
+            
+            confirm = input(f"Confirm {side} {quantity} {symbol} at ${price}? (y/N): ")
+            if confirm.lower() == 'y':
+                order = self.bot.place_limit_order(symbol, side, quantity, price)
+                print(f"\nLimit order placed successfully!")
+                print(f"order ID: {order['orderId']}")
+                print(f"Status: {order['status']}")
+            else:
+                print("order cancelled.")    
+        except Exception as e:
+            print(f"error placing limit order: {e}")
+    
+    def handle_stop_limit_order(self):
+        try:
+            symbol=self.get_user_input("enter symbol (e.g., BTC): ")
+            side=self.get_user_input("enter side (BUY/SELL): ").upper()
+            quantity=self.get_user_input("Enter quantity: ", float)
+            stop_price=self.get_user_input("enter stop price: ", float)
+            limit_price=self.get_user_input("enter limit price: ", float)
+            
+            current_price = self.bot.get_current_price(symbol)
+            print(f"current price for {symbol}: ${current_price:.2f}")
+            print(f"stop price: ${stop_price:.2f}")
+            print(f"limit price: ${limit_price:.2f}")
+            
+            confirm = input(f"Confirm stop-limit order? (y/N): ")
+            if confirm.lower() == 'y':
+                order = self.bot.place_stop_limit_order(symbol, side, quantity, stop_price, limit_price)
+                print(f"\nStop-limit order placed successfully!")
+                print(f"Order ID: {order['orderId']}")
+                print(f"Status: {order['status']}")
+            else:
+                print("Order cancelled.")
+                
+        except Exception as e:
+            print(f"error placing stop-limit order: {e}")
+    
+    def handle_order_status(self):
+        try:
+            symbol = self.get_user_input("enter symbol (e.g., BTC): ")
+            order_id = self.get_user_input("enter order ID: ", int)
+            
+            order = self.bot.get_order_status(symbol, order_id)
+            print(f"\nOrder Status:")
+            print(f"Order ID: {order['orderId']}")
+            print(f"Symbol: {order['symbol']}")
+            print(f"Side: {order['side']}")
+            print(f"Type: {order['type']}")
+            print(f"Status: {order['status']}")
+            print(f"Quantity: {order['origQty']}")
+            print(f"Executed Quantity: {order['executedQty']}")
+            
+        except Exception as e:
+            print(f"error getting order status: {e}")
+    
+    def handle_cancel_order(self):
+        try:
+            symbol = self.get_user_input("enter symbol (e.g., BTC): ")
+            order_id = self.get_user_input("enter order ID: ", int)
+            
+            confirm = input("confirm cancellation? (y/N): ")
+            if confirm.lower() == 'y':
+                result = self.bot.cancel_order(symbol, order_id)
+                print(f"order {order_id} cancelled successfully!")
+            else:
+                print("cancellation aborted.")
+                
+        except Exception as e:
+            print(f"error cancelling order: {e}")
+    
+    def handle_account_balance(self):
+        try:
+            balance = self.bot.get_account_balance()
+            
+            print(f"account Summary:")
+            print(f"total Wallet Balance: ${float(balance['totalWalletBalance']):.2f} USDT")
+            print(f"available Balance: ${float(balance['availableBalance']):.2f} USDT")
+            print(f"total Margin Balance: ${float(balance['totalMarginBalance']):.2f} USDT")
+            print(f"unrealized PnL: ${float(balance['totalUnrealizedPnl']):.2f} USDT")
+            
+        except Exception as e:
+            print(f"error getting account balance: {e}")
+    
+    def handle_current_price(self):
+        try:
+            symbol = self.get_user_input("Enter symbol (e.g., BTC): ")
+            
+            price = self.bot.get_current_price(symbol)
+            print(f"current price for {symbol.upper()}: ${price:.2f}")
+            
+        except Exception as e:
+            print(f"error getting current price: {e}")
+    
+    def run(self):
+        print("welcome to Binance Futures Trading Bot!")
+        print("connected to Testnet" if self.bot.testnet else "⚠️  Connected to LIVE trading")
+        
+        while True:
+            try:
+                self.display_menu()
+                choice = input("\nSelect option (1-8): ").strip()
+                
+                if choice == '1':
+                    self.handle_market_order()
+                elif choice == '2':
+                    self.handle_limit_order()
+                elif choice == '3':
+                    self.handle_stop_limit_order()
+                elif choice == '4':
+                    self.handle_order_status()
+                elif choice == '5':
+                    self.handle_cancel_order()
+                elif choice == '6':
+                    self.handle_account_balance()
+                elif choice == '7':
+                    self.handle_current_price()
+                elif choice == '8':
+                    print("Happy trading!")
+                    break
+                else:
+                    print("invalid option. Please select 1-8.")
+                
+                input("\nPress Enter to continue...")
+                
+            except KeyboardInterrupt:
+                print("\n\nGoodbye! Happy trading!")
+                break
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+
+
+def main():
+    if CONFIG_AVAILABLE:
+        try:
+            bot = BasicBot(BINANCE_API_KEY, BINANCE_API_SECRET, DEFAULT_TESTNET)
+            cli = TradingBotCLI(bot)
+            cli.run()
+        except Exception as e:
+            print(f"failed to start trading bot: {e}")
+            sys.exit(1)
+    else:
+        parser = argparse.ArgumentParser(description='Binance Futures Trading Bot')
+        parser.add_argument('--api-key', required=True, help='Binance API key')
+        parser.add_argument('--api-secret', required=True, help='Binance API secret')
+        parser.add_argument('--live', action='store_true', help='Use live trading (default: testnet)')
+        
+        args = parser.parse_args()
+        
+        try:
+            bot = BasicBot(args.api_key, args.api_secret, testnet=not args.live)
+            cli = TradingBotCLI(bot)
+            cli.run()
+        except Exception as e:
+            print(f"Failed to start trading bot: {e}")
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
