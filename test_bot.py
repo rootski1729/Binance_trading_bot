@@ -116,24 +116,14 @@ def run_basic_tests():
         
         test_results = []
         
-        # Test 1: connection
         test_results.append(("Connection Test", test_connection(bot)))
-        
-        # Test 2: price Fetching
         test_results.append(("Price Fetching", test_price_fetching(bot)))
-        
-        # Test 3: Mmarket order
         market_success, market_order_id = test_market_order(bot)
         test_results.append(("Market Order", market_success))
-        
-        # Test 4: limit Order
         limit_success, limit_order_id = test_limit_order(bot)
         test_results.append(("Limit Order", limit_success))
-        
-        # Test 5: Error Handling
         test_results.append(("Error Handling", test_error_handling(bot)))
         
-        # final Results
         print("\n" + "*" * 60)
         print("results")
         print("*" * 60)

@@ -293,7 +293,7 @@ Error Handling       ✅ PASSED
 
 ## 🐛 Troubleshooting
 
-### Common Issues
+### Common Issue
 
 **1. API Connection Error**
 ```
